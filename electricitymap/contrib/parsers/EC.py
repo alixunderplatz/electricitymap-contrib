@@ -49,6 +49,12 @@ PRODUCTION_MAPPINGS = {
     "Renovable":        "unknown",  # Renovable (solar + wind, not split further)
 }
 
+MONTHS_ES = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4,
+    "mayo": 5, "junio": 6, "julio": 7, "agosto": 8,
+    "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
+}
+
 
 # ── Plotly data decoding ──────────────────────────────────────────────────────
 
@@ -71,21 +77,6 @@ def _get_y_values(trace: dict) -> list:
 
 # ── HTML parsing ──────────────────────────────────────────────────────────────
 
-def _extract_array_at(html: str, pos: int) -> str:
-    """Walk from pos (pointing at '[') and return the full matching JSON array."""
-    depth = 0; in_str = False; esc = False
-    for i, ch in enumerate(html[pos:], start=pos):
-        if esc:                   esc = False;         continue
-        if ch == '\\' and in_str: esc = True;          continue
-        if ch == '"':             in_str = not in_str; continue
-        if in_str:                continue
-        if ch == '[':             depth += 1
-        elif ch == ']':
-            depth -= 1
-            if depth == 0: return html[pos:i + 1]
-    raise ValueError("No closing ']' found for Plotly traces array")
-
-
 def _parse_traces(html: str) -> dict:
     """
     Find the time-series chart (identified by 'stackgroup') and return all
@@ -97,8 +88,9 @@ def _parse_traces(html: str) -> dict:
             continue
         if '"stackgroup"' not in html[pos:pos + 2000]:
             continue
+        traces_data, _ = json.JSONDecoder().raw_decode(html, pos)
         result = {}
-        for trace in json.loads(_extract_array_at(html, pos)):
+        for trace in traces_data:
             name = trace.get("name", "")
             x    = list(trace.get("x", []))
             y    = _get_y_values(trace)
@@ -117,11 +109,6 @@ def _parse_page_date(html: str) -> date:
     would already be on the 23rd while Ecuador (UTC-5) is still on the 22nd.
     Falls back to datetime.now(TZ_EC).date() if parsing fails.
     """
-    MONTHS_ES = {
-        "enero": 1, "febrero": 2, "marzo": 3, "abril": 4,
-        "mayo": 5, "junio": 6, "julio": 7, "agosto": 8,
-        "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
-    }
     m = re.search(r"(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})", html)
     if m:
         month = MONTHS_ES.get(m.group(2).lower())
