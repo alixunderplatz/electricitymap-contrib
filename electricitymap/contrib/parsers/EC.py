@@ -37,32 +37,42 @@ from electricitymap.contrib.types import ZoneKey
 # CENACE has an incomplete SSL certificate chain — suppress the warning.
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-SOURCE   = "cenace.gob.ec"
+SOURCE = "cenace.gob.ec"
 ZONE_KEY = ZoneKey("EC")
-URL      = "https://www.cenace.gob.ec/info-operativa/InformacionOperativa.htm"
-TZ_EC    = ZoneInfo("America/Guayaquil")
+URL = "https://www.cenace.gob.ec/info-operativa/InformacionOperativa.htm"
+TZ_EC = ZoneInfo("America/Guayaquil")
 
 # Maps the three chart series names from the real-time dashboard to electricitymaps categories.
 PRODUCTION_MAPPINGS = {
-    "Hidr\u00e1ulica": "hydro",    # Hidráulica
-    "T\u00e9rmica":    "unknown",  # Térmica   (diesel/fuel oil/gas mix)
-    "Renovable":        "unknown",  # Renovable (solar + wind, not split further)
+    "Hidr\u00e1ulica": "hydro",  # Hidráulica
+    "T\u00e9rmica": "unknown",  # Térmica   (diesel/fuel oil/gas mix)
+    "Renovable": "unknown",  # Renovable (solar + wind, not split further)
 }
 
 MONTHS_ES = {
-    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4,
-    "mayo": 5, "junio": 6, "julio": 7, "agosto": 8,
-    "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
 }
 
 
 # ── Plotly data decoding ──────────────────────────────────────────────────────
 
+
 def _decode_bdata(b64: str) -> list:
     """Decode Plotly binary float64 array (base64, dtype f8)."""
     raw = base64.b64decode(b64)
-    n   = len(raw) // 8
-    return list(struct.unpack(f"{n}d", raw[:n * 8]))
+    n = len(raw) // 8
+    return list(struct.unpack(f"{n}d", raw[: n * 8]))
 
 
 def _get_y_values(trace: dict) -> list:
@@ -70,12 +80,13 @@ def _get_y_values(trace: dict) -> list:
     if "bdata" in trace:
         return _decode_bdata(trace["bdata"])
     y = trace.get("y", [])
-    if isinstance(y, dict) and "bdata" in y:   # nested typed array
+    if isinstance(y, dict) and "bdata" in y:  # nested typed array
         return _decode_bdata(y["bdata"])
     return [float(v) for v in y]
 
 
 # ── HTML parsing ──────────────────────────────────────────────────────────────
+
 
 def _parse_traces(html: str) -> dict:
     """
@@ -84,16 +95,16 @@ def _parse_traces(html: str) -> dict:
     """
     for m in re.finditer(r'Plotly\.newPlot\(\s*"[^"]+"\s*,\s*', html):
         pos = m.end()
-        if html[pos] != '[':
+        if html[pos] != "[":
             continue
-        if '"stackgroup"' not in html[pos:pos + 2000]:
+        if '"stackgroup"' not in html[pos : pos + 2000]:
             continue
         traces_data, _ = json.JSONDecoder().raw_decode(html, pos)
         result = {}
         for trace in traces_data:
             name = trace.get("name", "")
-            x    = list(trace.get("x", []))
-            y    = _get_y_values(trace)
+            x = list(trace.get("x", []))
+            y = _get_y_values(trace)
             if name and x and y:
                 result[name] = {"x": x, "y": y}
         return result
@@ -125,11 +136,12 @@ def _str_to_dt(time_str: str, today: date) -> datetime:
 
 # ── Public parser functions ───────────────────────────────────────────────────
 
+
 def fetch_production(
     zone_key: ZoneKey = ZONE_KEY,
-    session:  Session | None = None,
+    session: Session | None = None,
     target_datetime: datetime | None = None,
-    logger:   Logger = getLogger(__name__),
+    logger: Logger = getLogger(__name__),
 ) -> list:
     """
     Fetch real-time production breakdown for Ecuador (30-min resolution).
@@ -142,7 +154,7 @@ def fetch_production(
     resp.raise_for_status()
 
     traces = _parse_traces(resp.text)
-    today  = _parse_page_date(resp.text)
+    today = _parse_page_date(resp.text)
     now_ec = datetime.now(TZ_EC)
 
     ref = next((v for k, v in traces.items() if k in PRODUCTION_MAPPINGS), None)
@@ -161,8 +173,9 @@ def fetch_production(
             if series_name not in PRODUCTION_MAPPINGS:
                 continue
             em_key = PRODUCTION_MAPPINGS[series_name]
-            val    = float(series_data["y"][i]) if i < len(series_data["y"]) else 0.0
-            if val != val: continue  # NaN
+            val = float(series_data["y"][i]) if i < len(series_data["y"]) else 0.0
+            if val != val:
+                continue  # NaN
             val = max(val, 0.0)
             current = getattr(mix, em_key) or 0.0
             setattr(mix, em_key, round(current + val, 3))
@@ -184,9 +197,9 @@ def fetch_production(
 
 def fetch_consumption(
     zone_key: ZoneKey = ZONE_KEY,
-    session:  Session | None = None,
+    session: Session | None = None,
     target_datetime: datetime | None = None,
-    logger:   Logger = getLogger(__name__),
+    logger: Logger = getLogger(__name__),
 ) -> list:
     """
     Fetch real-time national demand (DEMANDA NACIONAL) for Ecuador.
@@ -198,12 +211,10 @@ def fetch_consumption(
     resp.raise_for_status()
 
     traces = _parse_traces(resp.text)
-    today  = _parse_page_date(resp.text)
+    today = _parse_page_date(resp.text)
     now_ec = datetime.now(TZ_EC)
 
-    demand_trace = next(
-        (v for k, v in traces.items() if "DEMANDA" in k.upper()), None
-    )
+    demand_trace = next((v for k, v in traces.items() if "DEMANDA" in k.upper()), None)
     if demand_trace is None:
         logger.warning("DEMANDA NACIONAL trace not found")
         return []
@@ -211,7 +222,7 @@ def fetch_consumption(
     consumption_list = TotalConsumptionList(logger)
 
     for i, ts in enumerate(demand_trace["x"]):
-        dt  = _str_to_dt(ts, today)
+        dt = _str_to_dt(ts, today)
         if dt > now_ec:
             break
         val = float(demand_trace["y"][i])
@@ -229,7 +240,6 @@ def fetch_consumption(
 
 
 if __name__ == "__main__":
-
     print("fetch_production() ->")
     print(fetch_production())
 
