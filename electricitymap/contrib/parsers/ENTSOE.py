@@ -1616,8 +1616,8 @@ def _fetch_exchange_capacity_forecasts(
     for attempt in range(1, max_retries + 1):
         if raw_export is None:
             raw_export = query_exchange_capacity_forecast(
-                domain_1,
                 domain_2,
+                domain_1,
                 session,
                 forecast_type,
                 target_datetime=target_datetime,
@@ -1625,8 +1625,8 @@ def _fetch_exchange_capacity_forecasts(
             )
         if raw_import is None:
             raw_import = query_exchange_capacity_forecast(
-                domain_2,
                 domain_1,
+                domain_2,
                 session,
                 forecast_type,
                 target_datetime=target_datetime,
